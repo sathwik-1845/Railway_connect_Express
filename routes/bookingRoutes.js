@@ -1,30 +1,43 @@
 const express = require("express");
-const Booking = require("../models/Booking");
-const Train = require("../models/Train");
-const authMiddleware = require("../middleware/authMiddleware");
-
 const router = express.Router();
+const Train = require("../models/Train");
 
-// Book Ticket
-router.post("/book", authMiddleware, async (req, res) => {
-  const { trainId, seats } = req.body;
+router.post("/", async (req, res) => {
+  try {
+    const { trainId, seats } = req.body || {};
 
-  const train = await Train.findById(trainId);
-  if (train.seatsAvailable < seats) {
-    return res.status(400).json({ message: "Not enough seats" });
+    if (!trainId || !seats) {
+      return res.status(400).json({
+        message: "trainId and seats are required",
+      });
+    }
+
+    const train = await Train.findById(trainId);
+
+    if (!train) {
+      return res.status(404).json({
+        message: "Train not found",
+      });
+    }
+
+    if (train.seatsAvailable < seats) {
+      return res.status(400).json({
+        message: "Not enough seats available",
+      });
+    }
+
+    // 🔽 reduce seats
+    train.seatsAvailable -= seats;
+    await train.save();
+
+    res.status(201).json({
+      message: "Booking successful",
+      train,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
   }
-
-  train.seatsAvailable -= seats;
-  await train.save();
-
-  const booking = new Booking({
-    userId: req.user.id,
-    trainId,
-    seats,
-  });
-
-  await booking.save();
-  res.json({ message: "Ticket booked successfully" });
 });
 
 module.exports = router;
